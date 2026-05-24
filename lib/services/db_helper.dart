@@ -21,8 +21,9 @@ class DbHelper {
     String path = join(await getDatabasesPath(), 'cart_database.db');
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -38,8 +39,24 @@ class DbHelper {
         image TEXT
       )
     ''');
+    await db.execute('''
+      CREATE TABLE favorites(
+        id INTEGER PRIMARY KEY
+      )
+    ''');
   }
 
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('''
+        CREATE TABLE favorites(
+          id INTEGER PRIMARY KEY
+        )
+      ''');
+    }
+  }
+
+  // --- Cart Operations ---
   Future<void> insertOrUpdateCartItem(CartItem item) async {
     final db = await database;
     await db.insert(
@@ -83,5 +100,21 @@ class DbHelper {
       items[product.id] = CartItem(product: product, quantity: map['quantity']);
     }
     return items;
+  }
+
+  // --- Favorite Operations ---
+  Future<void> toggleFavorite(int productId, bool isLiked) async {
+    final db = await database;
+    if (isLiked) {
+      await db.insert('favorites', {'id': productId}, conflictAlgorithm: ConflictAlgorithm.ignore);
+    } else {
+      await db.delete('favorites', where: 'id = ?', whereArgs: [productId]);
+    }
+  }
+
+  Future<Set<int>> getFavorites() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('favorites');
+    return maps.map((map) => map['id'] as int).toSet();
   }
 }
